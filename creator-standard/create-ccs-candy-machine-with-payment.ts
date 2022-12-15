@@ -1,8 +1,10 @@
+import fs from 'fs';
 import {
   Connection,
   Keypair,
   PublicKey,
   sendAndConfirmRawTransaction,
+  BlockheightBasedTransactionConfirmationStrategy,
   SystemProgram,
   Transaction,
 } from "@solana/web3.js";
@@ -25,9 +27,14 @@ import { connectionFor } from "../connection";
 // for environment variables
 require("dotenv").config();
 
-const candyMachineAuthorityKeypair = Keypair.fromSecretKey(
-  utils.bytes.bs58.decode(process.env.WALLET_KEYPAIR || "")
-);
+const path: string = process.env.WALLET_KEYPAIR || '';
+const secretKeyString = fs.readFileSync(path, { encoding: 'utf8' })
+const secretKey = Uint8Array.from(JSON.parse(secretKeyString))
+const candyMachineAuthorityKeypair = Keypair.fromSecretKey(secretKey)
+
+//const candyMachineAuthorityKeypair = Keypair.fromSecretKey(
+//  utils.bytes.bs58.decode(process.env.WALLET_KEYPAIR || "")
+//);
 const PAYMENT_MINT = new PublicKey(
   "tttvgrrNcjVZJS33UAcwTNs46pAidgsAgJqGfYGdZtG"
 );
@@ -41,6 +48,8 @@ const uuidFromConfigPubkey = (configAccount: PublicKey) => {
 };
 
 const createCandyMachine = async () => {
+  const uuid = uuidFromConfigPubkey(candyMachineKeypair.publicKey);
+
   const candyMachineWalletId = await findAta(
     PAYMENT_MINT,
     candyMachineKeypair.publicKey,
@@ -55,10 +64,10 @@ const createCandyMachine = async () => {
     },
     {
       data: {
-        uuid: uuidFromConfigPubkey(candyMachineKeypair.publicKey),
-        price: new BN(10),
-        symbol: "SYM",
-        sellerFeeBasisPoints: 500,
+        uuid: uuid,
+        price: new BN(1),
+        symbol: "BB",
+        sellerFeeBasisPoints: 999,
         maxSupply: new BN(2500),
         isMutable: true,
         retainAuthority: true,
@@ -107,8 +116,9 @@ const createCandyMachine = async () => {
     ITEMS_AVAILABLE * CONFIG_LINE_SIZE +
     8 +
     2 * (Math.floor(ITEMS_AVAILABLE / 8) + 1);
-  const rent_exempt_lamports =
-    await connection.getMinimumBalanceForRentExemption(size);
+  
+  const rent_exempt_lamports = await connection.getMinimumBalanceForRentExemption(size);
+  const latest = await connection.getLatestBlockhashAndContext();
 
   await withFindOrInitAssociatedTokenAccount(
     tx,
@@ -141,11 +151,31 @@ const createCandyMachine = async () => {
     cssInitIx,
   ];
   tx.feePayer = candyMachineAuthorityKeypair.publicKey;
-  tx.recentBlockhash = (await connection.getRecentBlockhash()).blockhash;
+  tx.recentBlockhash = latest.value.blockhash;
   tx.sign(candyMachineAuthorityKeypair, candyMachineKeypair);
-  const txid = await sendAndConfirmRawTransaction(connection, tx.serialize());
+
+  const strategy: BlockheightBasedTransactionConfirmationStrategy = {
+    signature: utils.bytes.bs58.encode(tx.signature as Buffer),
+    blockhash: latest.value.blockhash,
+    lastValidBlockHeight: latest.value.lastValidBlockHeight,
+  };
+
+  const txid = await sendAndConfirmRawTransaction(
+    connection,
+    tx.serialize(),
+    strategy,
+  );
+  
   console.log(
-    `Succesfully created candy machine with address ${candyMachineKeypair.publicKey.toString()} https://explorer.solana.com/tx/${txid}?cluster=${cluster}`
+    `Succesfully created candy machine`, {
+      cluster,
+      tx: `https://explorer.solana.com/tx/${txid}?cluster=${cluster}`,
+      txid,
+      candymachine: candyMachineKeypair.publicKey.toBase58(),
+      candymachine_account: `https://explorer.solana.com/address/${candyMachineKeypair.publicKey.toBase58()}?cluster=${cluster}`,
+      authority: candyMachineAuthorityKeypair.publicKey.toBase58(),
+      uuid: uuid,
+    }
   );
 };
 
