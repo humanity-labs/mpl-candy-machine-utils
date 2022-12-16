@@ -14,6 +14,7 @@ import {
   createInitializeCandyMachineInstruction,
   createSetLockupSettingsInstruction,
   findLockupSettingsId,
+  findCcsSettingsId,
   LockupType,
   PROGRAM_ID,
   WhitelistMintMode,
@@ -35,7 +36,7 @@ const candyMachineAuthorityKeypair = Keypair.fromSecretKey(secretKey)
 const candyMachineKeypair = Keypair.generate();
 const cluster = "devnet";
 const connection = connectionFor(cluster);
-const SUPPLY = 5;
+const ITEMS_AVAILABLE = 10;
 
 const uuidFromConfigPubkey = (configAccount: PublicKey) => {
   return configAccount.toBase58().slice(0, 6);
@@ -84,7 +85,7 @@ const createCandyMachine = async () => {
           mode: WhitelistMintMode.BurnEveryTime,
           presale: false,
         },*/
-        itemsAvailable: new BN(SUPPLY),
+        itemsAvailable: new BN(ITEMS_AVAILABLE),
         gatekeeper: null,
       },
     }
@@ -112,9 +113,9 @@ const createCandyMachine = async () => {
   const size =
     CONFIG_ARRAY_START +
     4 +
-    SUPPLY * CONFIG_LINE_SIZE +
+    ITEMS_AVAILABLE * CONFIG_LINE_SIZE +
     8 +
-    2 * (Math.floor(SUPPLY / 8) + 1);
+    2 * (Math.floor(ITEMS_AVAILABLE / 8) + 1);
   
   
   const rent_exempt_lamports = await connection.getMinimumBalanceForRentExemption(size);
@@ -145,7 +146,9 @@ const createCandyMachine = async () => {
     connection,
     tx.serialize(),
     strategy,
-  );
+  ).catch(err => {
+    console.error(`error sending mint transaction`, err);
+  });
   
   console.log(
     `Succesfully created candy machine`, {

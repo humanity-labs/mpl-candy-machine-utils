@@ -52,7 +52,9 @@ const payerKeypair = process.env.PAYER_KEYPAIR
 console.debug(`payerKeypair`, payerKeypair.publicKey.toBase58());
 
 const candyMachineId = new PublicKey(process.env.CANDY_MACHINE_ID || "");
-let collectionMintKeypair: Keypair | null = null;
+
+let collectionMintKeypair: Keypair | null = Keypair.generate();
+console.debug(`collectionMintKeypair`, collectionMintKeypair.publicKey.toBase58());
 
 const cluster = "devnet";
 
@@ -240,9 +242,13 @@ export const mint = async (
         [Buffer.from("collection"), candyMachineId.toBuffer()],
         PROGRAM_ID
       );
+    console.debug(`collectionPdaId`, collectionPdaId.toBase58());
+    
     const collectionMintMetadataId = await Metadata.getPDA(
       collectionMintKeypair.publicKey
     );
+    console.debug(`collectionMintMetadataId`, collectionMintMetadataId.toBase58());
+
     const collectionMasterEditionId = await MasterEdition.getPDA(
       collectionMintKeypair.publicKey
     );
@@ -257,6 +263,7 @@ export const mint = async (
       ],
       MetadataProgram.PUBKEY
     );
+    console.debug(`collectionAuthorityRecordId`, collectionAuthorityRecordId.toBase58());
 
     instructions.push(
       createSetCollectionDuringMintInstruction({

@@ -23,26 +23,28 @@ import { connectionFor } from "../connection";
 // for environment variables
 require("dotenv").config();
 
-const path: string = process.env.WALLET_KEYPAIR || '';
-const secretKeyString = fs.readFileSync(path, { encoding: 'utf8' })
-const secretKey = Uint8Array.from(JSON.parse(secretKeyString))
-const candyMachineAuthorityKeypair = Keypair.fromSecretKey(secretKey)
+const loadKeypair = () => {
+  const path: string = process.env.LAUNCH_AUTHORITY_KEY || '';
+  const secretKeyString = fs.readFileSync(path, { encoding: 'utf8' });
+  const secretKey = Uint8Array.from(JSON.parse(secretKeyString));
+  return Keypair.fromSecretKey(secretKey);
+};
 
 //const candyMachineAuthorityKeypair = Keypair.fromSecretKey(
 //  utils.bytes.bs58.decode(process.env.WALLET_KEYPAIR || "")
 //);
+const candyMachineAuthorityKeypair = loadKeypair();
 const candyMachineKeypair = Keypair.generate();
-const cluster = "devnet";
-const connection = connectionFor(cluster);
-const ITEMS_AVAILABLE = 100;
+const cluster = "mainnet";
+const ITEMS_AVAILABLE = 6500;
 
 const uuidFromConfigPubkey = (configAccount: PublicKey) => {
   return configAccount.toBase58().slice(0, 6);
 };
 
-const createCandyMachine = async () => {
+const createCandyMachine = async (): Promise<any> => {
+  const connection = connectionFor(cluster);
   const uuid = uuidFromConfigPubkey(candyMachineKeypair.publicKey);
-
   const initIx = createInitializeCandyMachineInstruction(
     {
       candyMachine: candyMachineKeypair.publicKey,
@@ -53,10 +55,10 @@ const createCandyMachine = async () => {
     {
       data: {
         uuid: uuid,
-        price: new BN(1),
+        price: new BN(0),
         symbol: "BB",
         sellerFeeBasisPoints: 999,
-        maxSupply: new BN(10),
+        maxSupply: new BN(ITEMS_AVAILABLE),
         isMutable: true,
         retainAuthority: true,
         goLiveDate: new BN(Date.now() / 1000),
@@ -65,6 +67,11 @@ const createCandyMachine = async () => {
           {
             address: candyMachineKeypair.publicKey,
             verified: true,
+            share: 0,
+          },
+          {
+            address: candyMachineAuthorityKeypair.publicKey,
+            verified: false,
             share: 100,
           },
         ],
@@ -115,6 +122,7 @@ const createCandyMachine = async () => {
     initIx,
     ccsInitIx,
   ];
+
   tx.feePayer = candyMachineAuthorityKeypair.publicKey;
   tx.recentBlockhash = latest.value.blockhash;
   tx.sign(candyMachineAuthorityKeypair, candyMachineKeypair);
@@ -125,25 +133,40 @@ const createCandyMachine = async () => {
     lastValidBlockHeight: latest.value.lastValidBlockHeight,
   };
 
-  const txid = await sendAndConfirmRawTransaction(
+  return await sendAndConfirmRawTransaction(
     connection,
     tx.serialize(),
     strategy,
-  );
-
-  console.log(
-    `Succesfully created candy machine`, {
-      cluster,
-      tx: `https://explorer.solana.com/tx/${txid}?cluster=${cluster}`,
-      txid,
-      candymachine: candyMachineKeypair.publicKey.toBase58(),
-      candymachine_account: `https://explorer.solana.com/address/${candyMachineKeypair.publicKey.toBase58()}?cluster=${cluster}`,
-      authority: candyMachineAuthorityKeypair.publicKey.toBase58(),
-      ccsSettingsId: ccsSettingsId.toBase58(),
-      rulesetId: rulesetId.toBase58(),
-      uuid: uuid,
+  )
+  .then(txid => {
+    console.log(
+      `Succesfully created candymachine`, {
+        candymachine: candyMachineKeypair.publicKey.toBase58(),
+        candymachineAccount: `https://explorer.solana.com/address/${candyMachineKeypair.publicKey.toBase58()}?cluster=${cluster}`,
+        candymachineAuthority: candyMachineAuthorityKeypair.publicKey.toBase58(),
+        ccsSettingsId: ccsSettingsId.toBase58(),
+        rulesetId: rulesetId.toBase58(),
+        uuid: uuid,
+        cluster,
+        txid,
+        tx: `https://explorer.solana.com/tx/${txid}?cluster=${cluster}`,
+      }
+    );
+    return Promise.resolve(txid);
+  })
+  .catch(err => {
+    const e = err.toString().toLowerCase();
+    if (e.indexOf('node is behind') > -1) {
+      return createCandyMachine();
     }
-  );
+    else if (e.indexOf('blockhash not found') > -1) {
+      return createCandyMachine();
+    }
+    else {
+      console.error(`[error]`, err);
+      return Promise.reject(err);
+    }
+  });
 };
 
 createCandyMachine();

@@ -11,7 +11,8 @@ import {
   createSetPermissionedSettingsInstruction,
   findCcsSettingsId,
   findPermissionedSettingsId,
-  LockupType,
+  createWithdrawFundsInstruction,
+  WithdrawFundsInstructionAccounts,
 } from "@cardinal/mpl-candy-machine-utils";
 import { BN, utils } from "@project-serum/anchor";
 import { findRulesetId } from "@cardinal/creator-standard";
@@ -30,28 +31,17 @@ const loadKeypair = () => {
 const candyMachineAuthorityKeypair = loadKeypair();
 const cluster = "mainnet";
 let connection = connectionFor(cluster);
-const candyMachineId = new PublicKey("C18WK75qhyG3CPocHwtLxt9VzRBuvjzKZR9vMJrFdq26");
+const candyMachineId = new PublicKey("3uDnkXFnANuCFnwp7Whis4cBBryRdHgbsTVokxgsSkf7");
 
-const addLockupSettings = async () => {
-  const rulesetId = findRulesetId();
-  const [cssSettingsId] = await findCcsSettingsId(candyMachineId);
-
+const withdraw = async (): Promise<any> => {
   console.debug(`> candyMachineId`, candyMachineId.toBase58());
-  console.debug(`> rulesetId`, rulesetId.toBase58());
-  console.debug(`> cssSettingsId`, cssSettingsId.toBase58());
-
+  
   const tx = new Transaction();
   tx.add(
-    createSetCssSettingsInstruction(
-      {
+    createWithdrawFundsInstruction(
+      <WithdrawFundsInstructionAccounts>{
         candyMachine: candyMachineId,
         authority: candyMachineAuthorityKeypair.publicKey,
-        ccsSettings: cssSettingsId,
-        payer: candyMachineAuthorityKeypair.publicKey,
-      },
-      {
-        creator: candyMachineAuthorityKeypair.publicKey,
-        ruleset: rulesetId,
       }
     )
   );
@@ -60,10 +50,15 @@ const addLockupSettings = async () => {
   tx.recentBlockhash = (await connection.getRecentBlockhash()).blockhash;
   tx.sign(candyMachineAuthorityKeypair);
   
+  console.debug(``);
+  console.debug(`Sending & broadcasting withdraw txn..`);
   return sendAndConfirmRawTransaction(connection, tx.serialize())
   .then(txid => {
     console.log(
-      `Succesfully set permissioned settings for candy machine with address ${candyMachineId.toString()} https://explorer.solana.com/tx/${txid}?cluster=${cluster}`
+      `Succesfully withdrew ${candyMachineId.toString()}`, {
+        candyMachine: candyMachineId.toBase58(),
+        tx: `https://explorer.solana.com/tx/${txid}?cluster=${cluster}`,
+      }
     );
     return Promise.resolve();
   })
@@ -71,11 +66,11 @@ const addLockupSettings = async () => {
     const e = err.toString().toLowerCase();
     if (e.indexOf('node is behind') > -1) {
       connection = connectionFor(cluster);
-      return addLockupSettings();
+      return withdraw();
     }
     else if (e.indexOf('blockhash not found') > -1) {
       connection = connectionFor(cluster);
-      return addLockupSettings();
+      return withdraw();
     }
     else {
       console.error(`[error]`, err);
@@ -84,4 +79,4 @@ const addLockupSettings = async () => {
   });
 };
 
-addLockupSettings();
+withdraw();

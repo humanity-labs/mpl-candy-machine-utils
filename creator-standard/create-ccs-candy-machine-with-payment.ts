@@ -15,13 +15,29 @@ import {
   createSetCssSettingsInstruction,
   findCcsSettingsId,
   PROGRAM_ID,
+
 } from "@cardinal/mpl-candy-machine-utils";
 import { BN, utils } from "@project-serum/anchor";
 import {
   findAta,
   withFindOrInitAssociatedTokenAccount,
 } from "@cardinal/token-manager";
-import { findRulesetId } from "@cardinal/creator-standard";
+import {
+  findRulesetId,
+  identifyCCSToken,
+  findMintManagerId,
+  findMintMetadataId,
+  // see https://github.com/cardinal-labs/cardinal-creator-standard/blob/main/tools/createCCSToken.ts
+  createSetInUseByInstruction,
+  createApproveAndSetInUseByInstruction,
+  createRemoveInUseByInstruction,
+  createTransferInstruction,
+  createUpdateMintManagerInstruction,
+  // see https://github.com/cardinal-labs/cardinal-creator-standard/blob/main/tools/createRuleset.ts
+  createInitRulesetInstruction,
+  createInitMintManagerInstruction,
+  createUpdateRulesetInstruction,
+} from "@cardinal/creator-standard";
 import { connectionFor } from "../connection";
 
 // for environment variables
@@ -92,10 +108,12 @@ const createCandyMachine = async () => {
       },
     }
   );
+
   const rulesetId = findRulesetId();
   const [cssSettingsId] = await findCcsSettingsId(
     candyMachineKeypair.publicKey
   );
+  
   const cssInitIx = createSetCssSettingsInstruction(
     {
       candyMachine: candyMachineKeypair.publicKey,
