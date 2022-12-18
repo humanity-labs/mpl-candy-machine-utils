@@ -1,12 +1,12 @@
 import fs from 'fs';
 import {
-  Connection,
   Keypair,
   PublicKey,
   sendAndConfirmRawTransaction,
   BlockheightBasedTransactionConfirmationStrategy,
   SystemProgram,
   Transaction,
+  LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import {
   CONFIG_ARRAY_START,
@@ -17,6 +17,10 @@ import {
   PROGRAM_ID,
 } from "@cardinal/mpl-candy-machine-utils";
 import { BN, utils } from "@project-serum/anchor";
+import {
+  findAta,
+  withFindOrInitAssociatedTokenAccount,
+} from "@cardinal/token-manager";
 import { findRulesetId } from "@cardinal/creator-standard";
 import { connectionFor } from "../connection";
 
@@ -30,13 +34,37 @@ const loadKeypair = () => {
   return Keypair.fromSecretKey(secretKey);
 };
 
-//const candyMachineAuthorityKeypair = Keypair.fromSecretKey(
-//  utils.bytes.bs58.decode(process.env.WALLET_KEYPAIR || "")
-//);
 const candyMachineAuthorityKeypair = loadKeypair();
 const candyMachineKeypair = Keypair.generate();
-const cluster = "mainnet";
-const ITEMS_AVAILABLE = 6500;
+
+// PHASE 0 SETTINGS
+const cluster = 'mainnet';
+const ITEMS_AVAILABLE = 200;
+const PRICE = 2.5 * LAMPORTS_PER_SOL;
+const GOLIVE = new Date("2022-12-17 21:00:00 UTC");
+const GATEKEEPER = new PublicKey("6u7LEag96LvY5qThjijBrBanzgEesadtXQy1s7hr9b1");
+const gatekeeper = { gatekeeperNetwork: GATEKEEPER, expireOnUse: true };
+
+// PHASE 1 SETTINGS
+// const cluster = "mainnet";
+// const ITEMS_AVAILABLE = 300;
+// const PRICE = 2.5 * LAMPORTS_PER_SOL;
+// const GOLIVE = new Date("2022-12-17 22:00:00 UTC");
+// const gatekeeper = null;
+
+// AIRDROP ELEVATED SETTINGS
+// const cluster = "mainnet";
+// const ITEMS_AVAILABLE = 3000;
+// const PRICE = 0;
+// const GOLIVE = new Date("2022-12-17 08:00:00 UTC");
+// const gatekeeper = null;
+
+// PHASE 1 SETTINGS DEVNET
+// const cluster = "devnet";
+// const ITEMS_AVAILABLE = 300;
+// const PRICE = 2.5 * LAMPORTS_PER_SOL;
+// const GOLIVE = new Date("2022-12-17 07:00:00 UTC");
+// const gatekeeper = null;
 
 const uuidFromConfigPubkey = (configAccount: PublicKey) => {
   return configAccount.toBase58().slice(0, 6);
@@ -45,6 +73,7 @@ const uuidFromConfigPubkey = (configAccount: PublicKey) => {
 const createCandyMachine = async (): Promise<any> => {
   const connection = connectionFor(cluster);
   const uuid = uuidFromConfigPubkey(candyMachineKeypair.publicKey);
+
   const initIx = createInitializeCandyMachineInstruction(
     {
       candyMachine: candyMachineKeypair.publicKey,
@@ -55,13 +84,13 @@ const createCandyMachine = async (): Promise<any> => {
     {
       data: {
         uuid: uuid,
-        price: new BN(0),
+        price: new BN(PRICE),
         symbol: "BB",
         sellerFeeBasisPoints: 999,
         maxSupply: new BN(ITEMS_AVAILABLE),
         isMutable: true,
         retainAuthority: true,
-        goLiveDate: new BN(Date.now() / 1000),
+        goLiveDate: new BN(GOLIVE.getTime() / 1000),
         endSettings: null,
         creators: [
           {
@@ -78,15 +107,16 @@ const createCandyMachine = async (): Promise<any> => {
         hiddenSettings: null,
         whitelistMintSettings: null,
         itemsAvailable: new BN(ITEMS_AVAILABLE),
-        gatekeeper: null,
+        gatekeeper: gatekeeper,
       },
     }
   );
 
+  console.debug(`> Adding ccs settings..`);
+  const rulesetId = findRulesetId();
   const [ccsSettingsId] = await findCcsSettingsId(
     candyMachineKeypair.publicKey
   );
-  const rulesetId = findRulesetId();
   const ccsInitIx = createSetCssSettingsInstruction(
     {
       candyMachine: candyMachineKeypair.publicKey,
@@ -133,6 +163,8 @@ const createCandyMachine = async (): Promise<any> => {
     lastValidBlockHeight: latest.value.lastValidBlockHeight,
   };
 
+  console.debug(``);
+  console.debug(`Sending & broadcasting create candymachine txn..`);
   return await sendAndConfirmRawTransaction(
     connection,
     tx.serialize(),

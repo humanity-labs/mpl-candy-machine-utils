@@ -1,12 +1,12 @@
 import fs from 'fs';
 import {
-  Connection,
   Keypair,
   PublicKey,
   sendAndConfirmRawTransaction,
   BlockheightBasedTransactionConfirmationStrategy,
   SystemProgram,
   Transaction,
+  LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import {
   CONFIG_ARRAY_START,
@@ -15,7 +15,6 @@ import {
   createSetCssSettingsInstruction,
   findCcsSettingsId,
   PROGRAM_ID,
-
 } from "@cardinal/mpl-candy-machine-utils";
 import { BN, utils } from "@project-serum/anchor";
 import {
@@ -43,27 +42,31 @@ import { connectionFor } from "../connection";
 // for environment variables
 require("dotenv").config();
 
-const path: string = process.env.WALLET_KEYPAIR || '';
-const secretKeyString = fs.readFileSync(path, { encoding: 'utf8' })
-const secretKey = Uint8Array.from(JSON.parse(secretKeyString))
-const candyMachineAuthorityKeypair = Keypair.fromSecretKey(secretKey)
+const loadKeypair = () => {
+  const path: string = process.env.LAUNCH_AUTHORITY_KEY || '';
+  const secretKeyString = fs.readFileSync(path, { encoding: 'utf8' });
+  const secretKey = Uint8Array.from(JSON.parse(secretKeyString));
+  return Keypair.fromSecretKey(secretKey);
+};
 
-//const candyMachineAuthorityKeypair = Keypair.fromSecretKey(
-//  utils.bytes.bs58.decode(process.env.WALLET_KEYPAIR || "")
-//);
+const candyMachineAuthorityKeypair = loadKeypair();
+const candyMachineKeypair = Keypair.generate();
+
 const PAYMENT_MINT = new PublicKey(
   "tttvgrrNcjVZJS33UAcwTNs46pAidgsAgJqGfYGdZtG"
 );
-const cluster = "devnet";
-const connection = connectionFor(cluster);
-const candyMachineKeypair = Keypair.generate();
-const ITEMS_AVAILABLE = 10;
+// const cluster = "devnet";
+const cluster = 'mainnet';
+const ITEMS_AVAILABLE = 500;
+const PRICE = 2.5;
+const GOLIVE = new Date("2022-12-17 20:00:00 UTC");
 
 const uuidFromConfigPubkey = (configAccount: PublicKey) => {
   return configAccount.toBase58().slice(0, 6);
 };
 
-const createCandyMachine = async () => {
+const createCandyMachine = async (): Promise<any> => {
+  const connection = connectionFor(cluster);
   const uuid = uuidFromConfigPubkey(candyMachineKeypair.publicKey);
 
   const candyMachineWalletId = await findAta(
@@ -81,13 +84,13 @@ const createCandyMachine = async () => {
     {
       data: {
         uuid: uuid,
-        price: new BN(1),
+        price: new BN(PRICE),
         symbol: "BB",
         sellerFeeBasisPoints: 999,
-        maxSupply: new BN(2500),
+        maxSupply: new BN(ITEMS_AVAILABLE),
         isMutable: true,
         retainAuthority: true,
-        goLiveDate: new BN(Date.now() / 1000),
+        goLiveDate: new BN(GOLIVE.getTime() / 1000),
         endSettings: null,
         creators: [
           {
@@ -109,11 +112,11 @@ const createCandyMachine = async () => {
     }
   );
 
+  console.debug(`> Adding ccs settings..`);
   const rulesetId = findRulesetId();
   const [cssSettingsId] = await findCcsSettingsId(
     candyMachineKeypair.publicKey
   );
-  
   const cssInitIx = createSetCssSettingsInstruction(
     {
       candyMachine: candyMachineKeypair.publicKey,
@@ -168,6 +171,7 @@ const createCandyMachine = async () => {
     },
     cssInitIx,
   ];
+
   tx.feePayer = candyMachineAuthorityKeypair.publicKey;
   tx.recentBlockhash = latest.value.blockhash;
   tx.sign(candyMachineAuthorityKeypair, candyMachineKeypair);
@@ -178,23 +182,42 @@ const createCandyMachine = async () => {
     lastValidBlockHeight: latest.value.lastValidBlockHeight,
   };
 
-  const txid = await sendAndConfirmRawTransaction(
+  console.debug(``);
+  console.debug(`Sending & broadcasting create candymachine txn..`);
+  return await sendAndConfirmRawTransaction(
     connection,
     tx.serialize(),
     strategy,
-  );
-  
-  console.log(
-    `Succesfully created candy machine`, {
-      cluster,
-      tx: `https://explorer.solana.com/tx/${txid}?cluster=${cluster}`,
-      txid,
-      candymachine: candyMachineKeypair.publicKey.toBase58(),
-      candymachine_account: `https://explorer.solana.com/address/${candyMachineKeypair.publicKey.toBase58()}?cluster=${cluster}`,
-      authority: candyMachineAuthorityKeypair.publicKey.toBase58(),
-      uuid: uuid,
+  )
+  .then(txid => {
+    console.log(
+      `Succesfully created candymachine`, {
+        candymachine: candyMachineKeypair.publicKey.toBase58(),
+        candymachineAccount: `https://explorer.solana.com/address/${candyMachineKeypair.publicKey.toBase58()}?cluster=${cluster}`,
+        candymachineAuthority: candyMachineAuthorityKeypair.publicKey.toBase58(),
+        ccsSettingsId: cssSettingsId.toBase58(),
+        rulesetId: rulesetId.toBase58(),
+        uuid: uuid,
+        cluster,
+        txid,
+        tx: `https://explorer.solana.com/tx/${txid}?cluster=${cluster}`,
+      }
+    );
+    return Promise.resolve(txid);
+  })
+  .catch(err => {
+    const e = err.toString().toLowerCase();
+    if (e.indexOf('node is behind') > -1) {
+      return createCandyMachine();
     }
-  );
+    else if (e.indexOf('blockhash not found') > -1) {
+      return createCandyMachine();
+    }
+    else {
+      console.error(`[error]`, err);
+      return Promise.reject(err);
+    }
+  });
 };
 
 createCandyMachine();
