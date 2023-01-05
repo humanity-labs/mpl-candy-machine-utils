@@ -30,8 +30,13 @@ let connection = connectionFor('mainnet');
 const cluster = "mainnet";
 // const candyMachineId = new PublicKey("BPbHupxWqjJxDQT9LaCo583R1JgMRqcHSfJLVzu7RdYn");
 // const ITEMS_AVAILABLE = 3873;
-const candyMachineId = new PublicKey("8WtmaAFjBEmAjfuBkjutcdYEDFogdH27CVFkVD257151");
-const ITEMS_AVAILABLE = 2650;
+// const candyMachineId = new PublicKey("8WtmaAFjBEmAjfuBkjutcdYEDFogdH27CVFkVD257151");
+const candyMachineId = new PublicKey("E11Wtp1YfVSrmoBoKTGL1KVLFYyujxRR4VVzDtxNg4va");
+// const ITEMS_AVAILABLE = (2742 + 138) + 1538;
+const ITEMS_AVAILABLE = 3000;
+const ALLOWLIST = new PublicKey(
+  process.env.ALLOWLIST as string,
+);
 
 const update = async (): Promise<any> => {
   console.debug(`> candyMachineId`, candyMachineId.toBase58());
@@ -53,19 +58,24 @@ const update = async (): Promise<any> => {
         price: candyMachine.data.price,
         symbol: candyMachine.data.symbol,
         sellerFeeBasisPoints: candyMachine.data.sellerFeeBasisPoints,
-        maxSupply: new BN(2650),
+        maxSupply: new BN(ITEMS_AVAILABLE),
         isMutable: candyMachine.data.isMutable,
         retainAuthority: candyMachine.data.retainAuthority,
         goLiveDate: candyMachine.data.goLiveDate,
         endSettings: {
           endSettingType: EndSettingType.Amount,
-          number: new BN(2650),
+          number: new BN(ITEMS_AVAILABLE),
         },
         creators: candyMachine.data.creators,
         hiddenSettings: candyMachine.data.hiddenSettings,
         whitelistMintSettings: candyMachine.data.whitelistMintSettings,
-        itemsAvailable: candyMachine.data.itemsAvailable,
-        gatekeeper: candyMachine.data.gatekeeper,
+        // itemsAvailable: candyMachine.data.itemsAvailable,
+        itemsAvailable: new BN(ITEMS_AVAILABLE),
+        // gatekeeper: candyMachine.data.gatekeeper,
+        gatekeeper: {
+          gatekeeperNetwork: ALLOWLIST,
+          expireOnUse: false,
+        }
       }
     })
   );

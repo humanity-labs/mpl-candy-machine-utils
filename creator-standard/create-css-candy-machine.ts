@@ -39,11 +39,12 @@ const candyMachineKeypair = Keypair.generate();
 
 // PHASE 0 SETTINGS
 const cluster = 'mainnet';
-const ITEMS_AVAILABLE = 200;
-const PRICE = 2.5 * LAMPORTS_PER_SOL;
+const ITEMS_AVAILABLE = 3000;
+// const PRICE = 2.5 * LAMPORTS_PER_SOL;
+const PRICE = 0;
 const GOLIVE = new Date("2022-12-17 21:00:00 UTC");
-const GATEKEEPER = new PublicKey("6u7LEag96LvY5qThjijBrBanzgEesadtXQy1s7hr9b1");
-const gatekeeper = { gatekeeperNetwork: GATEKEEPER, expireOnUse: true };
+const GATEKEEPER = new PublicKey("AAKVY6RzNP25DWtzFh6gvjoTT9EZhzkmgESm49pNR4cQ");
+const gatekeeper = { gatekeeperNetwork: GATEKEEPER, expireOnUse: false };
 
 // PHASE 1 SETTINGS
 // const cluster = "mainnet";
