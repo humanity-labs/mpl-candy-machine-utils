@@ -39,7 +39,7 @@ const candyMachineKeypair = Keypair.generate();
 
 // PHASE 0 SETTINGS
 const cluster = 'mainnet';
-const ITEMS_AVAILABLE = 3000;
+const ITEMS_AVAILABLE = 513;
 // const PRICE = 2.5 * LAMPORTS_PER_SOL;
 const PRICE = 0;
 const GOLIVE = new Date("2022-12-17 21:00:00 UTC");
