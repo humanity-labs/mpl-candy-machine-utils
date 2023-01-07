@@ -41,7 +41,10 @@ const cluster = "mainnet";
 // const candyMachineId = new PublicKey("FyBieRBPkiVgD44mJ9coTyB1NCHTFNmGguoZ22nN43kG");
 // const candyMachineId = new PublicKey("8WtmaAFjBEmAjfuBkjutcdYEDFogdH27CVFkVD257151");
 // const candyMachineId = new PublicKey("BPbHupxWqjJxDQT9LaCo583R1JgMRqcHSfJLVzu7RdYn");
-const candyMachineId = new PublicKey("5GcsLZW2btfQV8h9LB34jeCbnmWGVdKEwyyyWhUpTqTd");
+// // const candyMachineId = new PublicKey("5GcsLZW2btfQV8h9LB34jeCbnmWGVdKEwyyyWhUpTqTd");
+
+// const candyMachineId = new PublicKey("GXm6zUsjocAKdB9EAavmYP5Gb7g3mPZgnPbAP38ArA9K");
+const candyMachineId = new PublicKey("E11Wtp1YfVSrmoBoKTGL1KVLFYyujxRR4VVzDtxNg4va");
 
 // const cluster = "devnet";
 // const candyMachineId = new PublicKey("C3f8GUjKHeX6DdWqeAnwH3S5kfyz86mNFx11i6PgPQjA");
