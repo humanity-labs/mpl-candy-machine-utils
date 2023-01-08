@@ -9,18 +9,40 @@ import {
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import {
+  PROGRAM_ID,
   CONFIG_ARRAY_START,
   CONFIG_LINE_SIZE,
   createInitializeCandyMachineInstruction,
+  InitializeCandyMachineInstructionAccounts,
+  InitializeCandyMachineInstructionArgs,
   createSetCssSettingsInstruction,
+  SetCssSettingsInstructionAccounts,
+  SetCssSettingsInstructionArgs,
+  createSetLockupSettingsInstruction,
+  SetLockupSettingsInstructionAccounts,
+  createSetCollectionDuringMintInstruction,
+  SetCollectionDuringMintInstructionAccounts,
+  createSetCollectionInstruction,
+  SetCollectionInstructionAccounts,
+  createAddConfigLinesInstruction,
+  AddConfigLinesInstructionAccounts,
+  createUpdateAuthorityInstruction,
+  UpdateAuthorityInstructionAccounts,
+  createUpdateCandyMachineInstruction,
+  UpdateCandyMachineInstructionAccounts,
+  CandyMachineData,
+  CollectionPDA,
+  CollectionPDAArgs,
+  cusper,
+  Creator,
+  EndSettings,
+  HiddenSettings,
+  GatekeeperConfig,
   findCcsSettingsId,
-  PROGRAM_ID,
+  findLockupSettingsId,
+  LockupType,
 } from "@cardinal/mpl-candy-machine-utils";
 import { BN, utils } from "@project-serum/anchor";
-import {
-  findAta,
-  withFindOrInitAssociatedTokenAccount,
-} from "@cardinal/token-manager";
 import { findRulesetId } from "@cardinal/creator-standard";
 import { connectionFor } from "../connection";
 
@@ -39,25 +61,17 @@ const candyMachineKeypair = Keypair.generate();
 
 // PHASE 0 SETTINGS
 const cluster = 'mainnet';
-const ITEMS_AVAILABLE = 513;
-// const PRICE = 2.5 * LAMPORTS_PER_SOL;
+const ITEMS_AVAILABLE = 3699;
 const PRICE = 0;
-const GOLIVE = new Date("2022-12-17 21:00:00 UTC");
+const GOLIVE = new Date("2023-01-08 20:00:00 UTC");
 const GATEKEEPER = new PublicKey("AAKVY6RzNP25DWtzFh6gvjoTT9EZhzkmgESm49pNR4cQ");
-const gatekeeper = { gatekeeperNetwork: GATEKEEPER, expireOnUse: false };
+const gatekeeper: GatekeeperConfig = { gatekeeperNetwork: GATEKEEPER, expireOnUse: false };
 
 // PHASE 1 SETTINGS
 // const cluster = "mainnet";
 // const ITEMS_AVAILABLE = 300;
 // const PRICE = 2.5 * LAMPORTS_PER_SOL;
 // const GOLIVE = new Date("2022-12-17 22:00:00 UTC");
-// const gatekeeper = null;
-
-// AIRDROP ELEVATED SETTINGS
-// const cluster = "mainnet";
-// const ITEMS_AVAILABLE = 3000;
-// const PRICE = 0;
-// const GOLIVE = new Date("2022-12-17 08:00:00 UTC");
 // const gatekeeper = null;
 
 // PHASE 1 SETTINGS DEVNET
@@ -67,8 +81,18 @@ const gatekeeper = { gatekeeperNetwork: GATEKEEPER, expireOnUse: false };
 // const GOLIVE = new Date("2022-12-17 07:00:00 UTC");
 // const gatekeeper = null;
 
-const uuidFromConfigPubkey = (configAccount: PublicKey) => {
+const uuidFromConfigPubkey = (configAccount: PublicKey): string => {
   return configAccount.toBase58().slice(0, 6);
+};
+
+const calculateSize = (items): number => {
+  const size =
+    CONFIG_ARRAY_START +
+    4 +
+    items * CONFIG_LINE_SIZE +
+    8 +
+    2 * (Math.floor(items / 8) + 1);
+  return size;
 };
 
 const createCandyMachine = async (): Promise<any> => {
@@ -76,14 +100,14 @@ const createCandyMachine = async (): Promise<any> => {
   const uuid = uuidFromConfigPubkey(candyMachineKeypair.publicKey);
 
   const initIx = createInitializeCandyMachineInstruction(
-    {
+    <InitializeCandyMachineInstructionAccounts>{
       candyMachine: candyMachineKeypair.publicKey,
       wallet: candyMachineAuthorityKeypair.publicKey,
       authority: candyMachineAuthorityKeypair.publicKey,
       payer: candyMachineAuthorityKeypair.publicKey,
     },
-    {
-      data: {
+    <InitializeCandyMachineInstructionArgs>{
+      data: <CandyMachineData>{
         uuid: uuid,
         price: new BN(PRICE),
         symbol: "BB",
@@ -114,33 +138,33 @@ const createCandyMachine = async (): Promise<any> => {
   );
 
   console.debug(`> Adding ccs settings..`);
-  const rulesetId = findRulesetId();
+  const rulesetName = 'DEFAULT_RULESET';
+  const rulesetId = findRulesetId(rulesetName);
   const [ccsSettingsId] = await findCcsSettingsId(
     candyMachineKeypair.publicKey
   );
   const ccsInitIx = createSetCssSettingsInstruction(
-    {
+    <SetCssSettingsInstructionAccounts>{
       candyMachine: candyMachineKeypair.publicKey,
       authority: candyMachineAuthorityKeypair.publicKey,
       ccsSettings: ccsSettingsId,
       payer: candyMachineAuthorityKeypair.publicKey,
     },
-    {
+    <SetCssSettingsInstructionArgs>{
       creator: candyMachineAuthorityKeypair.publicKey,
       ruleset: rulesetId,
     }
   );
 
   const tx = new Transaction();
-  const size =
-    CONFIG_ARRAY_START +
-    4 +
-    ITEMS_AVAILABLE * CONFIG_LINE_SIZE +
-    8 +
-    2 * (Math.floor(ITEMS_AVAILABLE / 8) + 1);
+  const size = calculateSize(ITEMS_AVAILABLE);
+  const rent_exempt_lamports = await connection.getMinimumBalanceForRentExemption(size)
+  .catch(e => console.warn(e));
+  if (!rent_exempt_lamports) return createCandyMachine();
   
-  const rent_exempt_lamports = await connection.getMinimumBalanceForRentExemption(size);
-  const latest = await connection.getLatestBlockhashAndContext();
+  const latest = await connection.getLatestBlockhashAndContext()
+  .catch(e => console.warn(e));
+  if (!latest) return createCandyMachine();
 
   tx.instructions = [
     SystemProgram.createAccount({
@@ -194,6 +218,16 @@ const createCandyMachine = async (): Promise<any> => {
     }
     else if (e.indexOf('blockhash not found') > -1) {
       return createCandyMachine();
+    }
+    else if (err.logs) {
+      const resolved = cusper.errorFromProgramLogs(err.logs);
+      console.error(`[resolved-error]`, {
+        name: resolved?.name,
+        code: resolved?.code,
+        message: resolved?.message,
+        stack: resolved?.stack,
+      });
+      return Promise.reject(err);
     }
     else {
       console.error(`[error]`, err);
